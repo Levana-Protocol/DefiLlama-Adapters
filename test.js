@@ -61,7 +61,16 @@ async function getTvl(
     const chain = storedKey.split('-')[0]
     const block = chainBlocks[chain]
     const api = new sdk.ChainApi({ chain, block: chainBlocks[chain], timestamp: unixTimestamp, })
-    let tvlBalances = await tvlFunction(unixTimestamp, ethBlock, chainBlocks, { api, chain, block, storedKey });
+    const debugComputeTvl = (tvlBalances) => computeTVL(
+        tvlBalances,
+        "now",
+        false,
+        knownTokenPrices,
+        getCoingeckoLock,
+        maxCoingeckoRetries
+    );
+
+    let tvlBalances = await tvlFunction(unixTimestamp, ethBlock, chainBlocks, { api, chain, block, storedKey, debugComputeTvl });
     if (!tvlBalances && Object.keys(api.getBalances()).length) tvlBalances = api.getBalances()
     const tvlResults = await computeTVL(
       tvlBalances,

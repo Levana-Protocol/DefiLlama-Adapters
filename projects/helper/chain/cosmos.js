@@ -136,7 +136,7 @@ async function getDenomBalance({ denom, owner, block, chain } = {}) {
   return balance ? Number(balance.amount) : 0;
 }
 
-async function getBalance2({ balances = {}, owner, block, chain, tokens, blacklistedTokens, } = {}) {
+async function getBalance2({ balances = {}, owner, block, chain, tokens, blacklistedTokens, onDebugBalance } = {}) {
   const subpath = "cosmos";
   let endpoint = `${getEndpoint(
     chain
@@ -150,7 +150,17 @@ async function getBalance2({ balances = {}, owner, block, chain, tokens, blackli
   for (const { denom, amount } of data) {
     if (blacklistedTokens?.includes(denom)) continue;
     if (tokens && !tokens.includes(denom)) continue;
-    sdk.util.sumSingleBalance(balances, denom.replaceAll('/', ':'), amount);
+
+    const denomKey = denom.replaceAll('/', ':');
+    if(onDebugBalance) {
+      onDebugBalance({
+        block,
+        owner,
+        denomKey,
+        amount,
+      })
+    }
+    sdk.util.sumSingleBalance(balances, denomKey, amount);
   }
   return balances;
 }
@@ -277,7 +287,7 @@ async function queryContractStore({
   return query(url, block, chain);
 }
 
-async function sumTokens({ balances = {}, owners = [], chain, owner, tokens, blacklistedTokens, }) {
+async function sumTokens({ balances = {}, owners = [], chain, owner, tokens, blacklistedTokens, onDebugBalance }) {
   if (!tokens?.length || (tokens?.length === 1 && tokens[0] === ADDRESSES.null)) tokens = undefined;
   if (owner) owners = [owner]
   log(chain, "fetching balances for ", owners.length);
@@ -285,7 +295,7 @@ async function sumTokens({ balances = {}, owners = [], chain, owner, tokens, bla
 
   const { errors } = await PromisePool.withConcurrency(parallelLimit)
     .for(owners)
-    .process(async (owner) => getBalance2({ balances, owner, chain, tokens, blacklistedTokens, }));
+    .process(async (owner) => getBalance2({ balances, owner, chain, tokens, blacklistedTokens, onDebugBalance}));
 
   if (errors && errors.length) throw errors[0];
   return transformBalances(chain, balances);

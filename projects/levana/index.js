@@ -1,13 +1,84 @@
 const { queryContract, sumTokens } = require('../helper/chain/cosmos')
+const { transformBalances } = require('../helper/portedTokens')
 
-async function tvl(_, _b, _cb, { api, }) {
+async function tvl(_, _b, _cb, { api, debugComputeTvl }) {
   const { chain } = api
   const { factory } = config[chain]
   // Get a list of marketIds from the factory contract
   // Iterate over the markets and request the balance of each market's collateral token
-  const marketIds = await getMarketIds(chain, factory)
-  const _getMarketAddr = (marketId) => getMarketAddr(chain, factory, marketId)
-  return sumTokens({ chain, owners: await Promise.all(marketIds.map(_getMarketAddr)), })
+  const markets = await getMarketIds(chain, factory)
+    .then(marketIds =>
+      Promise.all(marketIds.map(id => getMarketAddr(chain, factory, id).then(addr => ({id, addr}))))
+    )
+    .then(marketList => marketList.reduce((acc, {id, addr}) => {
+      acc[id] = addr
+      return acc
+    }, {}))
+
+  const reverseMarketLookup = Object.entries(markets).reduce((acc, [id, addr]) => {
+    acc[addr] = id
+    return acc
+  }, {})
+
+  const marketDenomLookup = {}
+
+  const debugCollateralBalance = {
+    byMarket: {},
+    byDenom: {}
+  }
+
+
+  const onDebugBalance = ({ block, owner, denomKey, amount, }) => {
+    const marketId = reverseMarketLookup[owner]
+    if(marketDenomLookup[marketId] !== undefined) {
+      throw new Error("multiple denoms per market are not supported");
+    }
+    marketDenomLookup[marketId] = denomKey
+
+    if (debugCollateralBalance.byMarket[marketId] === undefined) {
+      debugCollateralBalance.byMarket[marketId] = 0
+    }
+    if(debugCollateralBalance.byDenom[denomKey] === undefined) {
+      debugCollateralBalance.byDenom[denomKey] = 0
+    }
+
+    debugCollateralBalance.byMarket[marketId] += Number(amount)
+    debugCollateralBalance.byDenom[denomKey] += Number(amount)
+  }
+
+  const res = await sumTokens({ chain, owners: Object.values(markets), onDebugBalance});
+
+  console.log(`----[${chain}] COLLATERAL BALANCE DEBUG----`)
+  console.log(debugCollateralBalance.byMarket)
+
+  const debugUsdTvlPerMarket = {
+  }
+  for(const [marketId, collateralBalance] of Object.entries(debugCollateralBalance.byMarket)) {
+    const denomKey = marketDenomLookup[marketId]
+
+    const balances = await transformBalances(chain, {
+      [denomKey]: collateralBalance.toString()
+    })
+
+    if(Object.values(balances)[0] !== collateralBalance.toString()) {
+      throw new Error(`transformBalances returned a different balance than the input: ${Object.values(balances)[0]} vs. ${collateralBalance.toString()}`)
+    }
+
+    const debugTvl = await debugComputeTvl(balances)
+
+    debugUsdTvlPerMarket[marketId] = debugTvl.usdTvl
+  }
+  
+  console.log(`----[${chain}] USD BALANCE DEBUG----`)
+  console.log(debugUsdTvlPerMarket)
+
+  for(const [marketId, usdTvl] of Object.entries(debugUsdTvlPerMarket)) {
+    if(usdTvl === 0) {
+      console.log(`On ${chain} chain, ${marketId} has 0 USD TVL, collateral balance is ${debugCollateralBalance.byMarket[marketId]}`)
+    }
+  }
+
+  return res;
 }
 
 async function getMarketIds(chain, factory) {
