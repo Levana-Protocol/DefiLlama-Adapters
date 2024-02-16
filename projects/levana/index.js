@@ -74,7 +74,8 @@ async function tvl(_, _b, _cb, { api, debugComputeTvl }) {
 
   for(const [marketId, usdTvl] of Object.entries(debugUsdTvlPerMarket)) {
     if(usdTvl === 0) {
-      console.log(`On ${chain} chain, ${marketId} has 0 USD TVL, collateral balance is ${debugCollateralBalance.byMarket[marketId]}`)
+      const denomKey = marketDenomLookup[marketId]
+      console.log(`On ${chain} chain, ${marketId} has 0 USD TVL, collateral balance is ${debugCollateralBalance.byMarket[marketId]}, denom is ${denomKey}`)
     }
   }
 
