@@ -48,6 +48,9 @@ async function tvl(_, _b, _cb, { api, debugComputeTvl }) {
 
   const res = await sumTokens({ chain, owners: Object.values(markets), onDebugBalance});
 
+  console.log(`----[${chain}] MARKET TO DENOM DEBUG----`)
+  console.log(marketDenomLookup)
+  
   console.log(`----[${chain}] COLLATERAL BALANCE DEBUG----`)
   console.log(debugCollateralBalance.byMarket)
 
@@ -75,7 +78,7 @@ async function tvl(_, _b, _cb, { api, debugComputeTvl }) {
   for(const [marketId, usdTvl] of Object.entries(debugUsdTvlPerMarket)) {
     if(usdTvl === 0) {
       const denomKey = marketDenomLookup[marketId]
-      console.log(`On ${chain} chain, ${marketId} has 0 USD TVL, collateral balance is ${debugCollateralBalance.byMarket[marketId]}, denom is ${denomKey}`)
+      console.log(`On ${chain} chain, ${marketId} has 0 USD TVL, collateral balance is ${debugCollateralBalance.byMarket[marketId]}`)
     }
   }
 
